@@ -1,11 +1,13 @@
 package org.vovkasm.WebImage;
 
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
 
 import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.resource.drawable.GlideDrawable;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.ImageViewTarget;
 import com.bumptech.glide.request.target.Target;
@@ -32,27 +34,6 @@ class WebImageViewManager extends SimpleViewManager<ImageView> {
         put("center", ScaleType.CENTER);
     }};
 
-    private static RequestListener LISTENER = new RequestListener<Uri,GlideDrawable>() {
-        @Override
-        public boolean onException(Exception e, Uri uri, Target<GlideDrawable> target, boolean isFirstResource) {
-            if (!(target instanceof ImageViewTarget)) {
-                return false;
-            }
-            ImageView view = (ImageView) ((ImageViewTarget) target).getView();
-            WritableMap event = Arguments.createMap();
-            event.putString("error", e.getMessage());
-            event.putString("uri", uri.toString());
-            ThemedReactContext context = (ThemedReactContext) view.getContext();
-            context.getJSModule(RCTEventEmitter.class).receiveEvent(view.getId(), "onWebImageError", event);
-            return false;
-        }
-
-        @Override
-        public boolean onResourceReady(GlideDrawable resource, Uri uri, Target<GlideDrawable> target, boolean isFromMemoryCache, boolean isFirstResource) {
-            return false;
-        }
-    };
-
     @Override
     public String getName() {
         return REACT_CLASS;
@@ -68,7 +49,26 @@ class WebImageViewManager extends SimpleViewManager<ImageView> {
         if (source == null) return;
         final String uriProp = source.getString("uri");
         final Uri uri = Uri.parse(uriProp);
-        Glide.with(view.getContext()).load(uri).listener(LISTENER).into(view);
+        Glide.with(view.getContext()).load(uri).listener(new RequestListener<Drawable>() {
+            @Override
+            public boolean onLoadFailed(@android.support.annotation.Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                if (!(target instanceof ImageViewTarget)) {
+                    return false;
+                }
+                ImageView view = (ImageView) ((ImageViewTarget) target).getView();
+                WritableMap event = Arguments.createMap();
+                event.putString("error", e.getMessage());
+                event.putString("uri", uri.toString());
+                ThemedReactContext context = (ThemedReactContext) view.getContext();
+                context.getJSModule(RCTEventEmitter.class).receiveEvent(view.getId(), "onWebImageError", event);
+                return false;
+            }
+
+            @Override
+            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                return false;
+            }
+        }).into(view);
     }
 
     @ReactProp(name="resizeMode")
