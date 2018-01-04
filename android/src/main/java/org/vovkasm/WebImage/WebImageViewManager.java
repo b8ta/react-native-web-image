@@ -1,38 +1,27 @@
 package org.vovkasm.WebImage;
 
-import android.graphics.drawable.Drawable;
+import android.graphics.Color;
 import android.net.Uri;
-import android.widget.ImageView;
-import android.widget.ImageView.ScaleType;
 
 import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.DataSource;
-import com.bumptech.glide.load.engine.GlideException;
-import com.bumptech.glide.request.RequestListener;
-import com.bumptech.glide.request.target.ImageViewTarget;
-import com.bumptech.glide.request.target.Target;
-import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.uimanager.SimpleViewManager;
+import com.facebook.react.module.annotations.ReactModule;
+import com.facebook.react.uimanager.BaseViewManager;
+import com.facebook.react.uimanager.PixelUtil;
 import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.ViewProps;
 import com.facebook.react.uimanager.annotations.ReactProp;
-import com.facebook.react.uimanager.events.RCTEventEmitter;
+import com.facebook.react.uimanager.annotations.ReactPropGroup;
+import com.facebook.yoga.YogaConstants;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.annotation.Nullable;
 
-class WebImageViewManager extends SimpleViewManager<ImageView> {
-    private static final String REACT_CLASS = "WebImageView";
-
-    private static Map<String, ImageView.ScaleType> RESIZE_MODE_MAP = new HashMap<String, ImageView.ScaleType>(){{
-        put("cover", ScaleType.CENTER_CROP);
-        put("contain", ScaleType.FIT_CENTER);
-        put("stretch", ScaleType.FIT_XY);
-        put("center", ScaleType.CENTER);
-    }};
+@ReactModule(name = WebImageViewManager.REACT_CLASS)
+class WebImageViewManager extends BaseViewManager<WebImageView, WebImageShadowNode> {
+    static final String REACT_CLASS = "WebImageView";
 
     @Override
     public String getName() {
@@ -40,43 +29,95 @@ class WebImageViewManager extends SimpleViewManager<ImageView> {
     }
 
     @Override
-    protected ImageView createViewInstance(ThemedReactContext reactContext) {
-        return new ImageView(reactContext);
+    protected WebImageView createViewInstance(ThemedReactContext reactContext) {
+        return new WebImageView(reactContext);
+    }
+
+    @Override
+    public void onDropViewInstance(WebImageView view) {
+        super.onDropViewInstance(view);
+        Glide.clear(view);
+    }
+
+    @Override
+    public WebImageShadowNode createShadowNodeInstance() {
+        return new WebImageShadowNode();
+    }
+
+    @Override
+    public Class<? extends WebImageShadowNode> getShadowNodeClass() {
+        return WebImageShadowNode.class;
     }
 
     @ReactProp(name="source")
-    public void setSrc(ImageView view, @Nullable ReadableMap source) {
+    public void setSrc(WebImageView view, @Nullable ReadableMap source) {
         if (source == null) return;
         final String uriProp = source.getString("uri");
         final Uri uri = Uri.parse(uriProp);
-        Glide.with(view.getContext()).load(uri).listener(new RequestListener<Drawable>() {
-            @Override
-            public boolean onLoadFailed(@android.support.annotation.Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                if (!(target instanceof ImageViewTarget)) {
-                    return false;
-                }
-                ImageView view = (ImageView) ((ImageViewTarget) target).getView();
-                WritableMap event = Arguments.createMap();
-                event.putString("error", e.getMessage());
-                event.putString("uri", uri.toString());
-                ThemedReactContext context = (ThemedReactContext) view.getContext();
-                context.getJSModule(RCTEventEmitter.class).receiveEvent(view.getId(), "onWebImageError", event);
-                return false;
-            }
-
-            @Override
-            public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                return false;
-            }
-        }).into(view);
+        view.setImageUri(uri);
     }
 
     @ReactProp(name="resizeMode")
-    public void setResizeMode(ImageView view, String resizeMode) {
-        ImageView.ScaleType scaleType = RESIZE_MODE_MAP.get(resizeMode);
+    public void setResizeMode(WebImageView view, String resizeMode) {
+        @WebImageView.ScaleType int scaleType;
 
-        if (scaleType != null) {
-            view.setScaleType(scaleType);
+        switch (resizeMode) {
+            case "contain":
+                view.setScaleType(WebImageView.SCALE_CONTAIN);
+                break;
+            case "cover":
+                view.setScaleType(WebImageView.SCALE_COVER);
+                break;
+            case "stretch":
+                view.setScaleType(WebImageView.SCALE_STRETCH);
+                break;
+            case "center":
+                view.setScaleType(WebImageView.SCALE_CENTER);
+        }
+    }
+
+    @ReactPropGroup(names = {
+            "borderColor",
+            "borderLeftColor",
+            "borderTopColor",
+            "borderRightColor",
+            "borderBottomColor"
+    }, customType = "Color")
+    public void setBorderColor(WebImageView view, int index, @Nullable Integer color) {
+        if (color == null) {
+            color = Color.TRANSPARENT;
+        }
+        if (index == 0) {
+            view.setBorderColor(color);
+        } else {
+            view.setBorderColor(color, index - 1);
+        }
+    }
+
+    @ReactPropGroup(names = {
+            ViewProps.BORDER_RADIUS,
+            ViewProps.BORDER_TOP_LEFT_RADIUS,
+            ViewProps.BORDER_TOP_RIGHT_RADIUS,
+            ViewProps.BORDER_BOTTOM_RIGHT_RADIUS,
+            ViewProps.BORDER_BOTTOM_LEFT_RADIUS
+    }, defaultFloat = YogaConstants.UNDEFINED)
+    public void setBorderRadius(WebImageView view, int index, float borderRadius) {
+        if (!YogaConstants.isUndefined(borderRadius)) {
+            borderRadius = PixelUtil.toPixelFromDIP(borderRadius);
+        }
+
+        if (index == 0) {
+            view.setBorderRadius(borderRadius);
+        } else {
+            view.setBorderRadius(borderRadius, index - 1);
+        }
+    }
+
+    @Override
+    public void updateExtraData(WebImageView view, Object extraData) {
+        if (extraData instanceof ShadowBoxMetrics) {
+            ShadowBoxMetrics bm = (ShadowBoxMetrics) extraData;
+            view.setBoxMetrics(bm);
         }
     }
 
@@ -89,4 +130,5 @@ class WebImageViewManager extends SimpleViewManager<ImageView> {
         exportedEvents.put("onWebImageError", onErrorEventExport);
         return exportedEvents;
     }
+
 }
